@@ -12,17 +12,21 @@ code=r'''
 #include <cstdio>
 #include <cstring>
 const char *version="Darwin Kernel Version 20.6.0: Thu Jul  6 22:12:47 PDT 2023; root:xnu-7195.141.49.702.12~1/RELEASE_X86_64";
-bool noaccel=false;
-bool checkKernelArgument(const char *s){return noaccel && !strcmp(s,"-wex-noaccel");}
+bool noaccel=false,skipGpuTicks=false;
+bool checkKernelArgument(const char *s){return (noaccel && !strcmp(s,"-wex-noaccel")) || (skipGpuTicks && !strcmp(s,"-wex-skip-gputicks"));}
 int kextIntelTGL,kextIntelTGLFb;
 bool adlnNativeRCSProfileRequested=false,display13TraceEnabled=false,display13Offline=false;
+struct IORegistryEntry {
+ static IORegistryEntry *getRegistryRoot(){static IORegistryEntry root;return &root;}
+ bool setProperty(const char *,bool){return true;}
+};
 struct XE {
  XELP::Profile xeProfile;
  bool tglGT2Detected=false,tglGT2Ready=false;
  bool display12SmallGTDetected=false,adlsDisplaySelected=false;
  bool adlnRequested=false,adlnDetected=false,adlnKernelReady=false,adlnNativeRequested=false;
  bool adlpDisplaySelected=false,adlpRenderRequested=false,display13FramebufferRequested=false;
- bool tglRequested=false,tglAcceleratorRequested=false,tglInactivePorts=false,tglPG1Poll=false;
+ bool tglRequested=false,tglAcceleratorRequested=false,tglSkipGPUTicks=false,tglInactivePorts=false,tglPG1Poll=false;
  bool tglClockOrderRequested=false,tglTrainingLeaseRequested=false,tglProgramEnabled=false;
  int *currentFramebuffer=nullptr,*currentGraphics=nullptr;
  struct {bool available=false;}modDVMTCalcFix;
