@@ -63,6 +63,10 @@ bool checkKernelArgument(const char *name) { return args.count(name); }
 static bool display13Offline;
 static int kextIntelTGLFb, kextAppleIntelTGLCompat, kextIntelTGL;
 static struct { void onKextLoadForce(int *) {} } lilu;
+struct IORegistryEntry {
+ static IORegistryEntry *getRegistryRoot() { static IORegistryEntry root; return &root; }
+ bool setProperty(const char *, bool) { return true; }
+};
 struct XE {
  XELP::Profile xeProfile;
  bool tglGT2Detected=false,tglGT2Ready=false;
@@ -71,6 +75,7 @@ struct XE {
  bool display12SmallGTReady=false, adlsDisplayHooksReady=false;
  bool adlsBootConsumersFailed=false;
  bool tglRequested=false, tglAcceleratorRequested=false;
+ bool tglSkipGPUTicks=false;
  bool tglInactivePorts=false, tglPG1Poll=false, tglClockOrderRequested=false;
  bool tglProgramEnabled=false, tglTrainingLeaseRequested=false;
  struct { bool available=false; } modDVMTCalcFix;
@@ -130,6 +135,10 @@ int main() {
  }
  xe=boot({},0x9A498086);
  assert(xe.tglRequested && xe.tglAcceleratorRequested && xe.tglProgramEnabled);
+ xe=boot({"-wex-skip-gputicks"},0x9A608086);
+ assert(xe.tglSkipGPUTicks && xe.tglAcceleratorRequested);
+ xe=boot({},0x9A608086);
+ assert(!xe.tglSkipGPUTicks && xe.tglAcceleratorRequested);
  xe=boot({"-wex-nopanel","-wex-tgl-prog-off"},0x9A408086);
  assert(xe.tglRequested && !xe.tglProgramEnabled);
  xe=boot({"-wex-tgl-off"},0x9A498086);assert(!xe.tglRequested);
