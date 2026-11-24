@@ -34,6 +34,7 @@ assert not {"-wex-display13", "-wex-adln-native", "-wex-adln-rcs-profile"} & use
 assert "-wex-nopanel" not in used and "-tglnopanel" not in used
 assert "const bool linearTest = display13FramebufferRequested;" in xe
 init = xe[xe.index('void XE::init() {'):xe.index('void XE::deinit()')]
+kernel_options = xe[xe.index('\tselectProfile(XELP::deviceProfile(physicalGPU));') + len('\tselectProfile(XELP::deviceProfile(physicalGPU));'):xe.index('    // ADLP_LOAD_ONLY_KERNEL:')]
 assert 'BaseDeviceInfo' not in init and 'CPU_MODEL' not in init
 entry = re.search(r'extern "C" kern_return_t tglStart\(.*?\n\}', provider, re.S).group()
 # Execute the production prerequisite expressions at all three entry points.
@@ -63,6 +64,10 @@ bool checkKernelArgument(const char *name) { return args.count(name); }
 static bool display13Offline;
 static int kextIntelTGLFb, kextAppleIntelTGLCompat, kextIntelTGL;
 static struct { void onKextLoadForce(int *) {} } lilu;
+struct IORegistryEntry {
+ static IORegistryEntry *getRegistryRoot() { static IORegistryEntry root; return &root; }
+ bool setProperty(const char *, bool) { return true; }
+};
 struct XE {
  XELP::Profile xeProfile;
  bool tglGT2Detected=false,tglGT2Ready=false;
@@ -71,12 +76,15 @@ struct XE {
  bool display12SmallGTReady=false, adlsDisplayHooksReady=false;
  bool adlsBootConsumersFailed=false;
  bool tglRequested=false, tglAcceleratorRequested=false;
+ bool tglSkipGPUTicks=false;
  bool tglInactivePorts=false, tglPG1Poll=false, tglClockOrderRequested=false;
  bool tglProgramEnabled=false, tglTrainingLeaseRequested=false;
  struct { bool available=false; } modDVMTCalcFix;
  int *currentGraphics=nullptr, *currentFramebuffer=nullptr;
  void init();
  void selectProfile(const XELP::Profile &);
+ void kernelOptions() { // KERNEL_OPTIONS
+ }
 };
 static XE *callbackXE;
 static bool adlnNativeRCSProfileRequested;
@@ -90,7 +98,7 @@ namespace WEXGraphicsActivation {bool ready(){return true;}}
 // PREREQUISITES
 static XE boot(std::initializer_list<const char *> names, uint32_t pci=0x46D28086,uint32_t effective=0) {
  args.clear(); for (const auto name:names) args.insert(name);
- XE xe; xe.init(); xe.selectProfile(XELP::identify(pci,0,effective?effective:pci)); assert(tglStart(nullptr,nullptr)==KERN_SUCCESS);
+ XE xe; xe.init(); xe.selectProfile(XELP::identify(pci,0,effective?effective:pci)); xe.kernelOptions(); assert(tglStart(nullptr,nullptr)==KERN_SUCCESS);
  return xe;
 }
 int main() {
@@ -133,6 +141,10 @@ int main() {
  }
  xe=boot({},0x9A498086);
  assert(xe.tglRequested && xe.tglAcceleratorRequested && xe.tglProgramEnabled);
+ xe=boot({"-wex-skip-gputicks"},0x9A608086);
+ assert(xe.tglSkipGPUTicks && xe.tglAcceleratorRequested);
+ xe=boot({},0x9A608086);
+ assert(!xe.tglSkipGPUTicks && xe.tglAcceleratorRequested);
  xe=boot({"-wex-nopanel","-wex-tgl-prog-off"},0x9A408086);
  assert(xe.tglRequested && !xe.tglProgramEnabled);
  xe=boot({"-wex-tgl-off"},0x9A498086);assert(!xe.tglRequested);
@@ -208,7 +220,7 @@ int main() {
  xe=XE{};xe.selectProfile(XELP::identify(0x9A498086,0));assert(!xe.tglRequested);
 
 }
-'''.replace('// ACTUAL_SOURCE', init + entry).replace('// PREREQUISITES', '\n'.join(prerequisites))
+'''.replace('// ACTUAL_SOURCE', init + entry).replace('// PREREQUISITES', '\n'.join(prerequisites)).replace('// KERNEL_OPTIONS', kernel_options)
 with tempfile.TemporaryDirectory(prefix='wex-boot-args-') as directory:
     directory = Path(directory)
     cpp, exe = directory / 'test.cpp', directory / 'test'
